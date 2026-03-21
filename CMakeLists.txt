@@ -5,6 +5,7 @@ set(EXEC_NAME bob)
 set(SRC_FILES
     src/main.c
     src/repository.c
+    src/object.c
 )
 
 add_executable(${EXEC_NAME} ${SRC_FILES})
