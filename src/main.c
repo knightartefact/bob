@@ -1,7 +1,8 @@
 #include <stdio.h>
-#include "repository.h"
-#include "object.h"
 #include <stdlib.h>
+#include <string.h>
+
+#include "commands.h"
 
 static int read_file(const char *filename, char *out, int *size)
 {
@@ -22,16 +23,13 @@ static int read_file(const char *filename, char *out, int *size)
 
 int main(int ac, char **av)
 {
-    char buf[32768] = {0};
-    int size = sizeof(buf);
-    if (read_file(av[1], buf, &size)) {
+    if (ac < 2) {
+        fprintf(stderr, "Usage: bob <command> [args]\n");
         return -1;
     }
-    bob_object_t *obj = object_new("blob", buf, size);
-    char *digest = object_write(obj);
-    object_free(obj);
-    obj = NULL;
-    obj = object_read(digest);
-    printf("Object:\n    type: %s\n    size: %d\n    data: %s\n", obj->type, obj->size, obj->data);
+    if (strcmp(av[1], "init") == 0) {
+        return cmd_init();
+    }
+    fprintf(stderr, "bob: unknown command: %s\n", av[1]);
     return 0;
 }
