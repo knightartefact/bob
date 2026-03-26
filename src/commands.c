@@ -43,3 +43,18 @@ int cmd_hash_object(const char *filepath)
     free(digest);
     return 0;
 }
+
+int cmd_cat_file(const char *hex)
+{
+    bob_object_t *obj = object_read(hex);
+
+    if (obj == NULL) {
+        return -1;
+    }
+    printf("type: %s\n", obj->type);
+    fwrite(obj->data, sizeof(char), obj->size, stdout);
+    printf("\n");
+
+    object_free(obj);
+    return 0;
+}
