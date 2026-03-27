@@ -19,6 +19,9 @@ int main(int ac, char **av)
     if ((strcmp(av[1], "cat-file") == 0) && (ac == 3)) {
         return cmd_cat_file(av[2]);
     }
+    if ((strcmp(av[1], "update-index") == 0) && (ac == 3)) {
+        return cmd_update_index(av[2]);
+    }
     fprintf(stderr, "bob: unknown command: %s\n", av[1]);
     return 0;
 }

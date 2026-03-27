@@ -7,6 +7,8 @@ set(SRC_FILES
     src/repository.c
     src/object.c
     src/commands.c
+    src/index.c
+    src/utils.c
 )
 
 add_executable(${EXEC_NAME} ${SRC_FILES})
