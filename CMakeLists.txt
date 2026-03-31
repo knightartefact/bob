@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(bob)
 
+add_subdirectory(${CMAKE_SOURCE_DIR}/libs)
+
 set(EXEC_NAME bob)
 set(SRC_FILES
     src/main.c
@@ -20,4 +22,5 @@ target_include_directories(${EXEC_NAME} PUBLIC
 target_link_libraries(${EXEC_NAME} PUBLIC
     ssl
     crypto
+    str
 )
