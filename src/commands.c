@@ -90,14 +90,28 @@ int cmd_update_index(const char *filepath)
     object_free(obj);
     index_entry_t entry = {0};
     strncpy(entry.path, filepath, sizeof(entry.path));
-    strncpy(entry.sha1, sha, sizeof(entry.sha1));
+    memcpy(entry.sha1, sha, sizeof(entry.sha1));
     entry.mode = st.st_mode;
     entry.mtime = st.st_mtime;
     entry.size = st.st_size;
+    entry.path_len = strlen(filepath);
 
     index_t index;
     index_read(&index);
     index_add(&index, &entry);
     index_write(&index);
+    return 0;
+}
+
+int cmd_ls_files(void)
+{
+    index_t index = {0};
+    index_read(&index);
+    for (int i = 0; i < index.count; i++) {
+        const index_entry_t *entry = &index.entries[i];
+        char hex[41] = {0};
+        sha2hex(entry->sha1, hex);
+        printf("%o %s %s\n", entry->mode, hex, entry->path);
+    }
     return 0;
 }
