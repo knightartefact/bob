@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include <arpa/inet.h>
 
 static uint32_t encode_u32(uint32_t hnum)
@@ -73,9 +74,9 @@ static int index_read_entry(FILE *f, index_entry_t *entry)
     return 0;
 }
 
-int index_read(index_t *idx)
+int index_read(index_t *index)
 {
-    idx->count = 0;
+    index->count = 0;
 
     FILE *f = fopen(".bob/index", "rb");
     if (!f) {
@@ -87,13 +88,13 @@ int index_read(index_t *idx)
         return -1;
     }
     for (uint32_t i = 0; i < num_entries; i++) {
-        index_entry_t *entry = &idx->entries[i];
+        index_entry_t *entry = &index->entries[i];
         if (index_read_entry(f, entry) == -1) {
             fclose(f);
             return -1;
         }
     }
-    idx->count = num_entries;
+    index->count = num_entries;
     fclose(f);
     return 0;
 }
@@ -119,35 +120,48 @@ static void index_write_entry(FILE *f, const index_entry_t *entry)
     fwrite(entry->path, 1, entry->path_len, f);
 }
 
-static void index_write_entries(FILE *f, const index_t *idx)
+static void index_write_entries(FILE *f, const index_t *index)
 {
-    for (int i = 0; i < idx->count; i++) {
-        index_entry_t e = idx->entries[i];
+    for (int i = 0; i < index->count; i++) {
+        index_entry_t e = index->entries[i];
         index_write_entry(f, &e);
     }
 }
 
-int index_write(const index_t *idx)
+int index_write(const index_t *index)
 {
     FILE *f = fopen(".bob/index", "wb");
     if (!f) {
         perror("index_write");
         return -1;
     }
-    index_write_header(f, idx->count);
-    index_write_entries(f, idx);
+    index_write_header(f, index->count);
+    index_write_entries(f, index);
     fclose(f);
     return 0;
 }
 
-void index_add(index_t *idx, const index_entry_t *entry)
+void index_add(index_t *index, const index_entry_t *entry)
 {
-    for (int i = 0; i < idx->count; i++) {
-        if (strcmp(idx->entries[i].path, entry->path) == 0) {
-            idx->entries[i] = *entry;
+    for (int i = 0; i < index->count; i++) {
+        if (strcmp(index->entries[i].path, entry->path) == 0) {
+            index->entries[i] = *entry;
             return;
         }
     }
-    if (idx->count < INDEX_MAX_ENTRIES)
-        idx->entries[idx->count++] = *entry;
+    if (index->count < INDEX_MAX_ENTRIES)
+        index->entries[index->count++] = *entry;
+        index_sort(index);
+}
+
+static int index_entry_cmp(const void *lhs, const void *rhs)
+{
+    const index_entry_t *left_entry = lhs;
+    const index_entry_t *right_entry = rhs;
+    return strncmp(left_entry->path, right_entry->path, INDEX_MAX_PATH);
+}
+
+void index_sort(index_t *index)
+{
+    qsort(index->entries, index->count, sizeof(index_entry_t), index_entry_cmp);
 }
