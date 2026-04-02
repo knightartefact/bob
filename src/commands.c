@@ -6,6 +6,7 @@
 #include "repository.h"
 #include "object.h"
 #include "index.h"
+#include "tree.h"
 #include "utils.h"
 
 int cmd_init(void)
@@ -113,5 +114,20 @@ int cmd_ls_files(void)
         sha2hex(entry->sha1, hex);
         printf("%o %s %s\n", entry->mode, hex, entry->path);
     }
+    return 0;
+}
+
+int cmd_write_tree(void)
+{
+    index_t index = {0};
+    index_read(&index);
+    char *digest = tree_write(&index);
+    if (digest == NULL) {
+        return -1;
+    }
+    char hex[41] = {0};
+    sha2hex((unsigned char *)digest, hex);
+    printf("%s\n", hex);
+    free(digest);
     return 0;
 }
