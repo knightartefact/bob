@@ -25,6 +25,9 @@ int main(int ac, char **av)
     if ((strcmp(av[1], "ls-files") == 0)) {
         return cmd_ls_files();
     }
+    if (strcmp(av[1], "add") == 0 && ac >= 3) {
+        return cmd_add(ac - 2, (const char **)(av + 2));
+    }
     if ((strcmp(av[1], "write-tree") == 0)) {
         return cmd_write_tree();
     }
