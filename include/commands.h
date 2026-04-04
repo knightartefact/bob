@@ -7,5 +7,6 @@ int cmd_cat_file(const char *hex);
 int cmd_update_index(const char *filepath);
 int cmd_ls_files(void);
 int cmd_write_tree(void);
+int cmd_commit_tree(const char *tree_hex, const char *message, const char *parent_hex);
 
 #endif /* !COMMANDS_H_ */

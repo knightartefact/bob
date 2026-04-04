@@ -28,6 +28,22 @@ int main(int ac, char **av)
     if ((strcmp(av[1], "write-tree") == 0)) {
         return cmd_write_tree();
     }
+    if (strcmp(av[1], "commit-tree") == 0 && ac >= 4) {
+        const char *tree_hex = av[2];
+        const char *message = NULL;
+        const char *parent_hex = NULL;
+        for (int i = 3; i < ac - 1; i++) {
+            if (strcmp(av[i], "-m") == 0)
+                message = av[++i];
+            else if (strcmp(av[i], "-p") == 0)
+                parent_hex = av[++i];
+        }
+        if (message == NULL) {
+            fprintf(stderr, "Usage: bob commit-tree <tree-sha> -m <message> [-p <parent-sha>]\n");
+            return -1;
+        }
+        return cmd_commit_tree(tree_hex, message, parent_hex);
+    }
     fprintf(stderr, "bob: unknown command: %s\n", av[1]);
     return 0;
 }

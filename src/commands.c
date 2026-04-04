@@ -7,6 +7,7 @@
 #include "object.h"
 #include "index.h"
 #include "tree.h"
+#include "commit.h"
 #include "utils.h"
 
 int cmd_init(void)
@@ -167,6 +168,19 @@ int cmd_write_tree(void)
     index_t index = {0};
     index_read(&index);
     char *digest = tree_write(&index);
+    if (digest == NULL) {
+        return -1;
+    }
+    char hex[41] = {0};
+    sha2hex((unsigned char *)digest, hex);
+    printf("%s\n", hex);
+    free(digest);
+    return 0;
+}
+
+int cmd_commit_tree(const char *tree_hex, const char *message, const char *parent_hex)
+{
+    char *digest = commit_create(tree_hex, parent_hex, message);
     if (digest == NULL) {
         return -1;
     }
