@@ -4,6 +4,7 @@
 // Procelain commands
 int cmd_init(void);
 int cmd_add(int count, const char **files);
+int cmd_commit(const char *message);
 
 // Plumbing commands
 int cmd_hash_object(const char *filepath);

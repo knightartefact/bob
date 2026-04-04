@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "commands.h"
@@ -30,6 +31,25 @@ int main(int ac, char **av)
     }
     if ((strcmp(av[1], "write-tree") == 0)) {
         return cmd_write_tree();
+    }
+    if (strcmp(av[1], "commit") == 0) {
+        const char *message = NULL;
+        for (int i = 2; i < ac - 1; i++) {
+            if (strcmp(av[i], "-m") == 0) {
+                message = av[++i];
+                break;
+            }
+        }
+        if (message == NULL) {
+            char buf[4096] = {0};
+            int len = fread(buf, 1, sizeof(buf) - 1, stdin);
+            if (len <= 0) {
+                fprintf(stderr, "Usage: bob commit -m <message>\n");
+                return -1;
+            }
+            return cmd_commit(buf);
+        }
+        return cmd_commit(message);
     }
     if (strcmp(av[1], "commit-tree") == 0 && ac >= 4) {
         const char *tree_hex = av[2];

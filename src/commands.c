@@ -199,3 +199,47 @@ int cmd_add(int count, const char **files)
     }
     return 0;
 }
+
+int cmd_commit(const char *message)
+{
+    index_t index = {0};
+    index_read(&index);
+    if (index.count == 0) {
+        fprintf(stderr, "nothing to commit (empty index)\n");
+        return 0;
+    }
+    char *tree_digest = tree_write(&index);
+    if (tree_digest == NULL) {
+        return -1;
+    }
+    char tree_hex[41] = {0};
+    sha2hex((unsigned char *)tree_digest, tree_hex);
+    free(tree_digest);
+
+    char ref[256] = {0};
+    if (ref_resolve_head(ref, sizeof(ref)) == -1) {
+        return -1;
+    }
+    char parent_hex[41] = {0};
+    const char *parent = NULL;
+    if (ref_read(ref, parent_hex) == 0) {
+        parent = parent_hex;
+    }
+
+    char *commit_digest = commit_create(tree_hex, parent, message);
+    if (commit_digest == NULL) {
+        return -1;
+    }
+    char commit_hex[41] = {0};
+    sha2hex((unsigned char *)commit_digest, commit_hex);
+    free(commit_digest);
+
+    if (ref_update(ref, commit_hex) == -1) {
+        return -1;
+    }
+
+    const char *branch = strrchr(ref, '/');
+    branch = branch ? branch + 1 : ref;
+    printf("[%s %.7s] %s\n", branch, commit_hex, message);
+    return 0;
+}
