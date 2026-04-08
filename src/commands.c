@@ -283,14 +283,24 @@ int cmd_commit(const char *message)
         return -1;
     }
     char parent_hex[41] = {0};
-    const char *parents[] = { parent_hex };
+    char merge_hex[41] = {0};
+    int is_merge = merge_read_head(merge_hex) == 0;
+
+    if (is_merge && merge_has_conflicts(&index)) {
+        fprintf(stderr, "cannot commit: unresolved conflicts\n");
+        return -1;
+    }
+
+    const char *parents[COMMIT_MAX_PARENTS] = {0};
     int parent_count = 0;
     if (head_type == 1) {
         strncpy(parent_hex, ref, 40);
-        parent_count = 1;
+        parents[parent_count++] = parent_hex;
     } else if (ref_read(ref, parent_hex) == 0) {
-        parent_count = 1;
+        parents[parent_count++] = parent_hex;
     }
+    if (is_merge)
+        parents[parent_count++] = merge_hex;
 
     char *commit_digest = commit_create(tree_hex, parents, parent_count, message);
     if (commit_digest == NULL) {
@@ -313,6 +323,8 @@ int cmd_commit(const char *message)
         branch = branch ? branch + 1 : ref;
         printf("[%s %.7s] %s\n", branch, commit_hex, message);
     }
+    if (is_merge)
+        merge_clear_head();
     return 0;
 }
 
@@ -548,6 +560,7 @@ int cmd_merge(const char *branch)
     merge_apply_to_worktree(&result);
 
     if (result.conflict_count > 0) {
+        merge_write_head(theirs_hex);
         printf("CONFLICT in %d file(s):\n", result.conflict_count);
         for (int i = 0; i < result.conflict_count; i++)
             printf("\t%s\n", result.conflicts[i].path);

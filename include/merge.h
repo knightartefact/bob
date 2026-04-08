@@ -28,5 +28,9 @@ void merge_apply_to_worktree(const merge_result_t *result);
 int merge_create_commit(const char *branch, const char *ours_hex,
                         const char *theirs_hex);
 int merge_resolve_commit_tree(const char *hex, tree_list_t *out);
+int merge_write_head(const char *hex);
+int merge_read_head(char *out_hex);
+void merge_clear_head(void);
+int merge_has_conflicts(const index_t *idx);
 
 #endif /* !MERGE_H_ */

@@ -284,3 +284,59 @@ int merge_create_commit(const char *branch, const char *ours_hex,
     printf("Merge made: %.7s\n", commit_hex);
     return 0;
 }
+
+int merge_write_head(const char *hex)
+{
+    FILE *fp = fopen(".bob/MERGE_HEAD", "w");
+    if (fp == NULL) {
+        perror(".bob/MERGE_HEAD");
+        return -1;
+    }
+    fprintf(fp, "%s\n", hex);
+    fclose(fp);
+    return 0;
+}
+
+int merge_read_head(char *out_hex)
+{
+    FILE *fp = fopen(".bob/MERGE_HEAD", "r");
+    if (fp == NULL)
+        return -1;
+    if (fgets(out_hex, 41, fp) == NULL) {
+        fclose(fp);
+        return -1;
+    }
+    out_hex[strcspn(out_hex, "\n")] = '\0';
+    fclose(fp);
+    return 0;
+}
+
+void merge_clear_head(void)
+{
+    remove(".bob/MERGE_HEAD");
+}
+
+static int file_has_markers(const char *path)
+{
+    FILE *fp = fopen(path, "r");
+    if (fp == NULL)
+        return 0;
+    char line[1024];
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        if (strncmp(line, "<<<<<<<", 7) == 0) {
+            fclose(fp);
+            return 1;
+        }
+    }
+    fclose(fp);
+    return 0;
+}
+
+int merge_has_conflicts(const index_t *idx)
+{
+    for (int i = 0; i < idx->count; i++) {
+        if (file_has_markers(idx->entries[i].path))
+            return 1;
+    }
+    return 0;
+}
