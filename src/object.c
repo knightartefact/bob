@@ -9,16 +9,11 @@
 
 #include <openssl/sha.h>
 
+#include "utils.h"
+
 static size_t create_header(const char *type, size_t size, char *header, size_t header_size)
 {
     return snprintf(header, header_size, "%s %u", type, size);
-}
-
-static void sha2hex(const unsigned char *digest, char *out)
-{
-    for (int i = 0; i < 20; i++)
-        sprintf(out + i * 2, "%02x", digest[i]);
-    out[40] = '\0';
 }
 
 static void object_path(const char *digest, char *out, size_t size)
@@ -97,17 +92,17 @@ char *object_write(const bob_object_t *obj)
     memmove(buf, header, header_len);
     memmove(buf + header_len + 1, obj->data, obj->size);
 
-    char digest[20] = {0};
+    char *digest = calloc(20, sizeof(char));
     SHA1(buf, buflen, digest);
 
-    char *filename = calloc(41, sizeof(char));
+    char filename[41] = {0};
     sha2hex(digest, filename);
     char filepath[4096] = {0};
     object_path(filename, filepath, sizeof(filepath));
     object_write_file(filepath, buf, buflen);
 
     free(buf);
-    return filename;
+    return digest;
 }
 
 static char *object_read_file(const char *filepath)
