@@ -69,6 +69,49 @@ int commit_parse(const bob_object_t *obj, bob_commit_t *commit)
     return 0;
 }
 
+static void print_identity(const char *label, const char *field)
+{
+    if (field[0] == '\0')
+        return;
+    const char *email_end = strchr(field, '>');
+    if (email_end)
+        printf("%s %.*s\n", label, (int)(email_end - field + 1), field);
+    else
+        printf("%s %s\n", label, field);
+}
+
+static void print_date(const char *field)
+{
+    if (field[0] == '\0')
+        return;
+    const char *email_end = strchr(field, '>');
+    if (email_end == NULL)
+        return;
+    long timestamp = strtol(email_end + 2, NULL, 10);
+    if (timestamp == 0)
+        return;
+    time_t t = (time_t)timestamp;
+    struct tm *tm = gmtime(&t);
+    char buf[64] = {0};
+    strftime(buf, sizeof(buf), "%a %b %d %H:%M:%S %Y %z", tm);
+    printf("Date: %s\n", buf);
+}
+
+void commit_print(const char *hex, const bob_commit_t *commit)
+{
+    printf("commit %s\n", hex);
+    if (commit->parent[0] != '\0')
+        printf("Parent: %s\n", commit->parent);
+    print_identity("Author", commit->author);
+    print_date(commit->author);
+    print_identity("Commit", commit->committer);
+    print_date(commit->committer);
+    printf("\n");
+    if (commit->message[0] != '\0')
+        printf("%s\n", commit->message);
+    printf("\n");
+}
+
 char *commit_create(const char *tree_hex, const char *parent_hex, const char *message)
 {
     bob_config_t cfg = {0};
