@@ -8,6 +8,7 @@ int cmd_commit(const char *message);
 int cmd_log(void);
 int cmd_status(void);
 int cmd_checkout(const char *arg);
+int cmd_branch(const char *name);
 
 // Plumbing commands
 int cmd_hash_object(const char *filepath);
