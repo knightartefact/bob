@@ -7,7 +7,7 @@ int cmd_add(int count, const char **files);
 int cmd_commit(const char *message);
 int cmd_log(void);
 int cmd_status(void);
-int cmd_checkout(const char *commit_hex);
+int cmd_checkout(const char *arg);
 
 // Plumbing commands
 int cmd_hash_object(const char *filepath);

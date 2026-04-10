@@ -80,12 +80,12 @@ int ref_resolve_head(char *out_ref, int size)
     }
     fclose(fp);
     line[strcspn(line, "\n")] = '\0';
-    if (strncmp(line, "ref: ", 5) != 0) {
-        fprintf(stderr, "HEAD is not a symbolic ref\nYou are in detached mode");
-        return -1;
+    if (strncmp(line, "ref: ", 5) == 0) {
+        strncpy(out_ref, line + 5, size - 1);
+        return 0;
     }
-    strncpy(out_ref, line + 5, size - 1);
-    return 0;
+    strncpy(out_ref, line, size - 1);
+    return 1;
 }
 
 int ref_read(const char *ref, char *out_hex)
@@ -114,6 +114,37 @@ int ref_update(const char *ref, const char *hex)
         return -1;
     }
     fprintf(fp, "%s\n", hex);
+    fclose(fp);
+    return 0;
+}
+
+int ref_resolve_commit(const char *arg, char *out_hex)
+{
+    char ref[256] = {0};
+    snprintf(ref, sizeof(ref), "refs/heads/%s", arg);
+    if (ref_read(ref, out_hex) == 0)
+        return 0;
+    strncpy(out_hex, arg, 40);
+    out_hex[40] = '\0';
+    return 0;
+}
+
+int ref_is_branch(const char *arg)
+{
+    char ref[256] = {0};
+    snprintf(ref, sizeof(ref), "refs/heads/%s", arg);
+    char hex[41] = {0};
+    return ref_read(ref, hex) == 0;
+}
+
+int ref_write_head(const char *value)
+{
+    FILE *fp = fopen(".bob/HEAD", "w");
+    if (fp == NULL) {
+        perror(".bob/HEAD");
+        return -1;
+    }
+    fprintf(fp, "%s\n", value);
     fclose(fp);
     return 0;
 }
