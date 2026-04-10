@@ -145,3 +145,12 @@ int tree_flatten(const char *tree_hex, const char *prefix, tree_list_t *out)
     object_free(obj);
     return 0;
 }
+
+const tree_entry_t *tree_list_find(const tree_list_t *list, const char *path)
+{
+    for (int i = 0; i < list->count; i++) {
+        if (strcmp(list->entries[i].path, path) == 0)
+            return &list->entries[i];
+    }
+    return NULL;
+}

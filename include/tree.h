@@ -24,4 +24,6 @@ typedef struct raw_tree_entry_s {
 char *tree_write(const index_t *idx);
 int tree_flatten(const char *tree_hex, const char *prefix, tree_list_t *out);
 
+const tree_entry_t *tree_list_find(const tree_list_t *list, const char *path);
+
 #endif /* !TREE_H_ */
