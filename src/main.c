@@ -44,6 +44,9 @@ int main(int ac, char **av)
     if (strcmp(av[1], "branch") == 0 && ac == 3) {
         return cmd_branch(av[2]);
     }
+    if (strcmp(av[1], "branch") == 0 && ac == 2) {
+        return cmd_list_branches();
+    }
     if (strcmp(av[1], "commit") == 0) {
         const char *message = NULL;
         for (int i = 2; i < ac - 1; i++) {

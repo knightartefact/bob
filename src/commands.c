@@ -1,3 +1,4 @@
+#include <dirent.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -416,4 +417,27 @@ int cmd_branch(const char *name)
         return -1;
     }
     return ref_update(branch_ref, hex);
+}
+
+int cmd_list_branches(void)
+{
+    char ref[256] = {0};
+    int head_type = ref_resolve_head(ref, sizeof(ref));
+
+    DIR *dp = opendir(".bob/refs/heads");
+    if (dp == NULL) {
+        perror(".bob/refs/heads");
+        return -1;
+    }
+    struct dirent *ent;
+    while ((ent = readdir(dp)) != NULL) {
+        if (ent->d_name[0] == '.')
+            continue;
+        char branch_ref[256] = {0};
+        snprintf(branch_ref, sizeof(branch_ref), "refs/heads/%s", ent->d_name);
+        int is_current = head_type == 0 && strcmp(ref, branch_ref) == 0;
+        printf("%s %s\n", is_current ? "*" : " ", ent->d_name);
+    }
+    closedir(dp);
+    return 0;
 }
