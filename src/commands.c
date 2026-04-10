@@ -124,6 +124,16 @@ int cmd_update_index(const char *filepath)
 {
     struct stat st;
     if (stat(filepath, &st) == -1) {
+        if (errno == ENOENT) {
+            index_t index;
+            index_read(&index);
+            if (index_remove(&index, filepath) == -1) {
+                fprintf(stderr, "pathspec '%s' did not match any files\n", filepath);
+                return -1;
+            }
+            index_write(&index);
+            return 0;
+        }
         perror(filepath);
         return -1;
     }
