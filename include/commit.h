@@ -1,11 +1,18 @@
 #ifndef COMMIT_H_
 #define COMMIT_H_
 
-// Creates a commit object from a tree hash, optional parent hash, and message.
-// tree_hex: 40-char hex SHA1 of the tree object.
-// parent_hex: 40-char hex SHA1 of parent commit, or NULL for root commit.
-// message: commit message string.
-// Returns 20-byte binary SHA1 digest (caller must free), or NULL on error.
+#include "object.h"
+
+typedef struct bob_commit_s {
+    char tree[41];
+    char parent[41];
+    char author[256];
+    char committer[256];
+    char message[4096];
+} bob_commit_t;
+
+int commit_parse(const bob_object_t *obj, bob_commit_t *commit);
+void commit_print(const char *hex, const bob_commit_t *commit);
 char *commit_create(const char *tree_hex, const char *parent_hex, const char *message);
 
 #endif /* !COMMIT_H_ */
