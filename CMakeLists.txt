@@ -17,6 +17,7 @@ set(SRC_FILES
     src/worktree.c
     src/status.c
     src/checkout.c
+    src/diff.c
 )
 
 add_executable(${EXEC_NAME} ${SRC_FILES})

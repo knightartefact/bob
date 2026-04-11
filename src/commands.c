@@ -13,6 +13,7 @@
 #include "utils.h"
 #include "status.h"
 #include "checkout.h"
+#include "diff.h"
 
 int cmd_init(void)
 {
@@ -439,5 +440,55 @@ int cmd_list_branches(void)
         printf("%s %s\n", is_current ? "*" : " ", ent->d_name);
     }
     closedir(dp);
+    return 0;
+}
+
+static int resolve_head_tree(tree_list_t *out)
+{
+    char ref[256] = {0};
+    int head_type = ref_resolve_head(ref, sizeof(ref));
+    if (head_type == -1)
+        return -1;
+    char hex[41] = {0};
+    if (head_type == 1) {
+        strncpy(hex, ref, 40);
+    } else if (ref_read(ref, hex) == -1) {
+        fprintf(stderr, "no commits yet\n");
+        return -1;
+    }
+    bob_object_t *obj = object_read(hex);
+    if (obj == NULL)
+        return -1;
+    bob_commit_t commit;
+    commit_parse(obj, &commit);
+    object_free(obj);
+    return tree_flatten(commit.tree, "", out);
+}
+
+static int resolve_arg_tree(const char *arg, tree_list_t *out)
+{
+    char hex[41] = {0};
+    ref_resolve_commit(arg, hex);
+    bob_object_t *obj = object_read(hex);
+    if (obj == NULL)
+        return -1;
+    bob_commit_t commit;
+    commit_parse(obj, &commit);
+    object_free(obj);
+    return tree_flatten(commit.tree, "", out);
+}
+
+int cmd_diff(const char *arg)
+{
+    tree_list_t ours = {0};
+    if (resolve_head_tree(&ours) == -1)
+        return -1;
+    tree_list_t theirs = {0};
+    if (resolve_arg_tree(arg, &theirs) == -1)
+        return -1;
+    diff_list_t diff = {0};
+    diff_trees(&ours, &theirs, &diff);
+    for (int i = 0; i < diff.count; i++)
+        diff_print_entry(&diff.entries[i]);
     return 0;
 }
