@@ -22,6 +22,9 @@ int main(int ac, char **av)
     if ((strcmp(av[1], "update-index") == 0) && (ac == 3)) {
         return cmd_update_index(av[2]);
     }
+    if ((strcmp(av[1], "ls-files") == 0)) {
+        return cmd_ls_files();
+    }
     fprintf(stderr, "bob: unknown command: %s\n", av[1]);
     return 0;
 }
