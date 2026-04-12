@@ -10,23 +10,24 @@
 #include <openssl/sha.h>
 
 #include "utils.h"
+#include "str/str.h"
 
-static size_t create_header(const char *type, size_t size, char *header, size_t header_size)
+static str_t create_header(const char *type, size_t size)
 {
-    return snprintf(header, header_size, "%s %u", type, size);
+    return strformat("%s %u", type, size);
 }
 
-static void object_path(const char *digest, char *out, size_t size)
+static str_t object_path(const char *digest)
 {
-    snprintf(out, size, ".bob/objects/%.2s/%s", digest, digest + 2);
+    return strformat(".bob/objects/%.2s/%s", digest, digest + 2);
 }
 
 static void object_create_dir(const char *obj_path)
 {
-    char *cpy = strdup(obj_path);
-    char *dir = dirname(cpy);
+    str_t path = strnew(obj_path);
+    char *dir = dirname(path);
     mkdir(dir, 0755);
-    free(cpy);
+    strfree(path);
 }
 
 static FILE *object_create_file(const char *filepath)
@@ -40,7 +41,7 @@ static FILE *object_create_file(const char *filepath)
     return fp;
 }
 
-static int object_write_file(const char *filepath, const char *data, size_t size)
+static int object_write_file(str_t filepath, str_t data)
 {
     if (access(filepath, F_OK) == 0) {
         return 0;
@@ -49,7 +50,7 @@ static int object_write_file(const char *filepath, const char *data, size_t size
     if (fp == NULL) {
         return -1;
     }
-    fwrite(data, sizeof(*data), size, fp);
+    fwrite(data, sizeof(*data), strlength(data), fp);
     fclose(fp);
     return 0;
 }
@@ -78,34 +79,35 @@ void object_free(bob_object_t *obj)
     free(obj);
 }
 
-char *object_write(const bob_object_t *obj)
+char *object_hash_data(str_t data)
 {
-    char header[4096] = {0};
-    size_t header_len = create_header(obj->type, obj->size, header, sizeof(header));
-    size_t buflen = header_len + 1 + obj->size;
-    char *buf = calloc(buflen, sizeof(*buf));
-
-    if (buf == NULL) {
-        perror("object_write");
+    char *digest = calloc(20, sizeof(char));
+    if (digest == NULL) {
         return NULL;
     }
-    memmove(buf, header, header_len);
-    memmove(buf + header_len + 1, obj->data, obj->size);
-
-    char *digest = calloc(20, sizeof(char));
-    SHA1(buf, buflen, digest);
-
-    char filename[41] = {0};
-    sha2hex(digest, filename);
-    char filepath[4096] = {0};
-    object_path(filename, filepath, sizeof(filepath));
-    object_write_file(filepath, buf, buflen);
-
-    free(buf);
+    SHA1(data, strlength(data), digest);
     return digest;
 }
 
-static char *object_read_file(const char *filepath)
+char *object_write(const bob_object_t *obj)
+{
+    str_t header = create_header(obj->type, obj->size);
+    strpush(&header, '\0');
+    strnconcat(&header, obj->data, obj->size);
+
+    char *digest = object_hash_data(header);
+
+    char filename[41] = {0};
+    sha2hex(digest, filename);
+    str_t filepath = object_path(filename);
+    object_write_file(filepath, header);
+
+    strfree(header);
+    strfree(filepath);
+    return digest;
+}
+
+static str_t object_read_file(const char *filepath)
 {
     FILE *fp = fopen(filepath, "rb");
 
@@ -117,16 +119,15 @@ static char *object_read_file(const char *filepath)
     fseek(fp, 0, SEEK_END);
     size_t filesize = ftell(fp);
     rewind(fp);
-    char *buf = calloc(filesize, sizeof(*buf));
+    str_t data = strnewlen("", filesize);
 
-    if (buf == NULL) {
-        fprintf(stderr, "Could not allocate object read buffer\n");
+    if (data == NULL) {
         fclose(fp);
         return NULL;
     }
-    fread(buf, filesize, sizeof(*buf), fp);
+    fread(data, filesize, sizeof(*data), fp);
     fclose(fp);
-    return buf;
+    return data;
 }
 
 static int strchindex(const char *str, char c)
@@ -140,7 +141,7 @@ static int strchindex(const char *str, char c)
     return (int)(strend - str);
 }
 
-static bob_object_t *object_parse_object(const char *buf)
+static bob_object_t *object_parse_object(const str_t buf)
 {
     int type_len = strchindex(buf, ' ');
     if (type_len == -1) {
@@ -166,16 +167,15 @@ static bob_object_t *object_parse_object(const char *buf)
 
 bob_object_t *object_read(const char *filename)
 {
-    char path[256] = {0};
-    object_path(filename, path, sizeof(path));
+    str_t path = object_path(filename);
+    str_t data = object_read_file(path);
 
-    char *filedata = object_read_file(path);
-
-    if (filedata == NULL) {
+    if (data == NULL) {
         return NULL;
     }
 
-    bob_object_t *obj = object_parse_object(filedata);
-    free(filedata);
+    bob_object_t *obj = object_parse_object(data);
+    strfree(data);
+    strfree(path);
     return obj;
 }
