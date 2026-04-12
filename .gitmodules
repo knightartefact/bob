@@ -1,0 +1,3 @@
+[submodule "libs/str"]
+	path = libs/str
+	url = https://github.com/knightartefact/str.git
