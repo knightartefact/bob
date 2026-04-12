@@ -14,6 +14,16 @@ static uint32_t decode_u32(uint32_t inum)
     return ntohl(inum);
 }
 
+static uint16_t encode_u16(uint16_t hnum)
+{
+    return htons(hnum);
+}
+
+static uint16_t decode_u16(uint16_t inum)
+{
+    return ntohs(inum);
+}
+
 static int index_read_header(FILE *f)
 {
     char magic[4] = {0};
@@ -37,19 +47,29 @@ static int index_read_header(FILE *f)
     return num_entries;
 }
 
-static int index_read_entry(FILE *f, index_entry_t *entry)
+static int index_read_entry_stat(FILE *f, index_entry_t *entry)
 {
     if (fread(&entry->mode, 4, 1, f) != 1 ||
         fread(&entry->mtime, 4, 1, f) != 1 ||
-        fread(&entry->size, 4, 1, f) != 1 ||
-        fread(&entry->sha1, 1, sizeof(entry->sha1), f) != sizeof(entry->sha1) ||
-        fread(&entry->path, 1, sizeof(entry->path), f) != sizeof(entry->path)) {
+        fread(&entry->size, 4, 1, f) != 1) {
         return -1;
     }
-
     entry->mode = decode_u32(entry->mode);
     entry->mtime = decode_u32(entry->mtime);
     entry->size = decode_u32(entry->size);
+    return 0;
+}
+
+static int index_read_entry(FILE *f, index_entry_t *entry)
+{
+    if (index_read_entry_stat(f, entry) == -1) {
+        return -1;
+    }
+    fread(&entry->sha1, 1, sizeof(entry->sha1), f) != sizeof(entry->sha1);
+    fread(&entry->path_len, sizeof(entry->path_len), 1, f);
+    entry->path_len = decode_u16(entry->path_len);
+    fread(&entry->path, sizeof(*entry->path), entry->path_len, f) != sizeof(entry->path);
+    entry->path[entry->path_len] = 0;
     return 0;
 }
 
@@ -94,7 +114,9 @@ static void index_write_entry(FILE *f, const index_entry_t *entry)
     word = encode_u32(entry->size);
     fwrite(&word, 4, 1, f);
     fwrite(entry->sha1, 1, sizeof(entry->sha1), f);
-    fwrite(entry->path, 1, sizeof(entry->path), f);
+    uint16_t path_len = encode_u16(entry->path_len);
+    fwrite(&path_len, sizeof(path_len), 1, f);
+    fwrite(entry->path, 1, entry->path_len, f);
 }
 
 static void index_write_entries(FILE *f, const index_t *idx)

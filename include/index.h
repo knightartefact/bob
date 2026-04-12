@@ -12,6 +12,7 @@ typedef struct index_entry_s {
     uint32_t mtime;
     uint32_t size;
     uint8_t sha1[20];
+    uint16_t path_len;
     char path[INDEX_MAX_PATH];
 } index_entry_t;
 
