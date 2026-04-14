@@ -64,7 +64,14 @@ bob_object_t *object_new(const char *type, const char *data, size_t size)
         return NULL;
     }
     obj->type = strdup(type);
-    obj->data = strdup(data);
+    obj->data = malloc(size + 1);
+    if (obj->data == NULL) {
+        free(obj->type);
+        free(obj);
+        return NULL;
+    }
+    memcpy(obj->data, data, size);
+    obj->data[size] = '\0';
     obj->size = size;
     return obj;
 }
