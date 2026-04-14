@@ -25,6 +25,9 @@ int main(int ac, char **av)
     if ((strcmp(av[1], "ls-files") == 0)) {
         return cmd_ls_files();
     }
+    if ((strcmp(av[1], "write-tree") == 0)) {
+        return cmd_write_tree();
+    }
     fprintf(stderr, "bob: unknown command: %s\n", av[1]);
     return 0;
 }
