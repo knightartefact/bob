@@ -190,3 +190,12 @@ int cmd_commit_tree(const char *tree_hex, const char *message, const char *paren
     free(digest);
     return 0;
 }
+
+int cmd_add(int count, const char **files)
+{
+    for (int i = 0; i < count; i++) {
+        if (cmd_update_index(files[i]) == -1)
+            return -1;
+    }
+    return 0;
+}
