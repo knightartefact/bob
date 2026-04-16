@@ -46,6 +46,7 @@ static int create_config_file(void)
         fprintf(stderr, "Couldn't create bob config file: %s\n", strerror(errno));
         return -1;
     }
+    fprintf(fp, "name=\nemail=\n");
     fclose(fp);
 }
 
@@ -62,5 +63,57 @@ int create_repository(void)
         return -1;
     }
     printf("Initialized bob repository in %s\n", abspath);
+    return 0;
+}
+
+int ref_resolve_head(char *out_ref, int size)
+{
+    FILE *fp = fopen(".bob/HEAD", "r");
+    if (fp == NULL) {
+        perror(".bob/HEAD");
+        return -1;
+    }
+    char line[512] = {0};
+    if (fgets(line, sizeof(line), fp) == NULL) {
+        fclose(fp);
+        return -1;
+    }
+    fclose(fp);
+    line[strcspn(line, "\n")] = '\0';
+    if (strncmp(line, "ref: ", 5) != 0) {
+        fprintf(stderr, "HEAD is not a symbolic ref\nYou are in detached mode");
+        return -1;
+    }
+    strncpy(out_ref, line + 5, size - 1);
+    return 0;
+}
+
+int ref_read(const char *ref, char *out_hex)
+{
+    char path[512] = {0};
+    snprintf(path, sizeof(path), ".bob/%s", ref);
+    FILE *fp = fopen(path, "r");
+    if (fp == NULL)
+        return -1;
+    if (fgets(out_hex, 41, fp) == NULL) {
+        fclose(fp);
+        return -1;
+    }
+    out_hex[strcspn(out_hex, "\n")] = '\0';
+    fclose(fp);
+    return 0;
+}
+
+int ref_update(const char *ref, const char *hex)
+{
+    char path[512] = {0};
+    snprintf(path, sizeof(path), ".bob/%s", ref);
+    FILE *fp = fopen(path, "w");
+    if (fp == NULL) {
+        perror(path);
+        return -1;
+    }
+    fprintf(fp, "%s\n", hex);
+    fclose(fp);
     return 0;
 }
