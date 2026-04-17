@@ -3,12 +3,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include "object.h"
 #include "commit.h"
 #include "checkout.h"
 #include "repository.h"
 #include "utils.h"
+#include "str/str.h"
 
 #define MAX_ANCESTORS 1024
 
@@ -67,6 +71,9 @@ int merge_find_base(const char *hex_a, const char *hex_b, char *out_hex)
     return -1;
 }
 
+static str_t merge_blob_3way(const uint8_t *base_sha, const uint8_t *ours_sha,
+                             const uint8_t *theirs_sha, int *out_clean);
+
 static void add_merged(merge_result_t *result, const tree_entry_t *entry)
 {
     if (result->merged.count >= INDEX_MAX_ENTRIES)
@@ -99,6 +106,51 @@ static void add_conflict(merge_result_t *result, const char *path,
     result->conflict_count++;
 }
 
+static void merge_both_modified(merge_result_t *result, const char *path,
+                                const tree_entry_t *base, const tree_entry_t *ours,
+                                const tree_entry_t *theirs)
+{
+    if (base == NULL) {
+        add_conflict(result, path, base, ours, theirs);
+        return;
+    }
+
+    int clean = 0;
+    str_t merged = merge_blob_3way(base->sha1, ours->sha1, theirs->sha1, &clean);
+    if (merged == NULL) {
+        add_conflict(result, path, base, ours, theirs);
+        return;
+    }
+
+    if (clean) {
+        bob_object_t *blob = object_new("blob", merged, strlength(merged));
+        strfree(merged);
+        if (blob == NULL) {
+            add_conflict(result, path, base, ours, theirs);
+            return;
+        }
+        char *digest = object_write(blob);
+        object_free(blob);
+        if (digest == NULL) {
+            add_conflict(result, path, base, ours, theirs);
+            return;
+        }
+        tree_entry_t e = *ours;
+        memcpy(e.sha1, digest, 20);
+        free(digest);
+        add_merged(result, &e);
+        return;
+    }
+
+    int prev_count = result->conflict_count;
+    add_conflict(result, path, base, ours, theirs);
+    if (result->conflict_count == prev_count) {
+        strfree(merged);
+        return;
+    }
+    result->conflicts[result->conflict_count - 1].merged = merged;
+}
+
 static void merge_both_present(merge_result_t *result, const char *path,
                                const tree_entry_t *base, const tree_entry_t *ours,
                                const tree_entry_t *theirs)
@@ -110,7 +162,7 @@ static void merge_both_present(merge_result_t *result, const char *path,
     else if (base && sha_equal(base->sha1, theirs->sha1))
         add_merged(result, ours);
     else
-        add_conflict(result, path, base, ours, theirs);
+        merge_both_modified(result, path, base, ours, theirs);
 }
 
 static void merge_only_ours(merge_result_t *result, const char *path,
@@ -180,18 +232,108 @@ int merge_trees(const tree_list_t *base, const tree_list_t *ours,
     return 0;
 }
 
-static int read_blob_data(const uint8_t *sha, char **out, size_t *out_size)
+static str_t read_blob_data(const uint8_t *sha)
 {
     char hex[41] = {0};
     sha2hex(sha, hex);
     bob_object_t *obj = object_read(hex);
     if (obj == NULL)
-        return -1;
-    *out = obj->data;
-    *out_size = obj->size;
-    obj->data = NULL;
+        return NULL;
+    str_t out = strnewlen(obj->data, obj->size);
     object_free(obj);
+    return out;
+}
+
+static int write_tmp_file(const char *path, const str_t data)
+{
+    FILE *fp = fopen(path, "wb");
+    if (fp == NULL)
+        return -1;
+    size_t len = strlength(data);
+    if (len)
+        fwrite(data, 1, len, fp);
+    fclose(fp);
     return 0;
+}
+
+static str_t slurp_pipe(FILE *fp)
+{
+    str_t out = strnewcap(4096);
+    if (out == NULL)
+        return NULL;
+    char chunk[4096];
+    size_t n;
+    while ((n = fread(chunk, 1, sizeof(chunk), fp)) > 0) {
+        if (strnconcat(&out, chunk, n) == -1) {
+            strfree(out);
+            return NULL;
+        }
+    }
+    return out;
+}
+
+static int stage_blob_to_tmp(const uint8_t *sha, const char *tmp_path)
+{
+    str_t data = read_blob_data(sha);
+    if (data == NULL)
+        return -1;
+    int rc = write_tmp_file(tmp_path, data);
+    strfree(data);
+    return rc;
+}
+
+static void build_diff3_paths(char *base_path, char *ours_path,
+                              char *theirs_path, size_t cap)
+{
+    pid_t pid = getpid();
+    snprintf(base_path, cap, "/tmp/bob_merge_%d_base", pid);
+    snprintf(ours_path, cap, "/tmp/bob_merge_%d_ours", pid);
+    snprintf(theirs_path, cap, "/tmp/bob_merge_%d_theirs", pid);
+}
+
+static str_t run_diff3(const char *ours_path, const char *base_path,
+                       const char *theirs_path, int *out_clean)
+{
+    str_t cmd = strformat("diff3 -m --label ours --label base --label theirs %s %s %s", ours_path, base_path, theirs_path);
+    if (cmd == NULL)
+        return NULL;
+
+    FILE *fp = popen(cmd, "r");
+    strfree(cmd);
+    if (fp == NULL)
+        return NULL;
+
+    str_t out = slurp_pipe(fp);
+    int status = pclose(fp);
+    if (out == NULL)
+        return NULL;
+
+    int exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    if (exit_code != 0 && exit_code != 1) {
+        strfree(out);
+        return NULL;
+    }
+    *out_clean = (exit_code == 0);
+    return out;
+}
+
+static str_t merge_blob_3way(const uint8_t *base_sha, const uint8_t *ours_sha,
+                             const uint8_t *theirs_sha, int *out_clean)
+{
+    char base_path[64], ours_path[64], theirs_path[64];
+    build_diff3_paths(base_path, ours_path, theirs_path, sizeof(base_path));
+
+    str_t out = NULL;
+    if (stage_blob_to_tmp(base_sha, base_path) == 0
+        && stage_blob_to_tmp(ours_sha, ours_path) == 0
+        && stage_blob_to_tmp(theirs_sha, theirs_path) == 0) {
+        out = run_diff3(ours_path, base_path, theirs_path, out_clean);
+    }
+
+    remove(base_path);
+    remove(ours_path);
+    remove(theirs_path);
+    return out;
 }
 
 int merge_write_conflict(const merge_conflict_t *conflict)
@@ -202,25 +344,30 @@ int merge_write_conflict(const merge_conflict_t *conflict)
         return -1;
     }
 
-    char *ours_data = NULL, *theirs_data = NULL;
-    size_t ours_size = 0, theirs_size = 0;
+    if (conflict->merged) {
+        size_t len = strlength(conflict->merged);
+        if (len)
+            fwrite(conflict->merged, 1, len, fp);
+        fclose(fp);
+        return 0;
+    }
 
-    if (conflict->has_ours)
-        read_blob_data(conflict->ours_sha, &ours_data, &ours_size);
-    if (conflict->has_theirs)
-        read_blob_data(conflict->theirs_sha, &theirs_data, &theirs_size);
+    str_t ours = conflict->has_ours ? read_blob_data(conflict->ours_sha) : NULL;
+    str_t theirs = conflict->has_theirs ? read_blob_data(conflict->theirs_sha) : NULL;
 
     fprintf(fp, "<<<<<<< ours\n");
-    if (ours_data)
-        fwrite(ours_data, 1, ours_size, fp);
+    if (ours)
+        fwrite(ours, 1, strlength(ours), fp);
     fprintf(fp, "=======\n");
-    if (theirs_data)
-        fwrite(theirs_data, 1, theirs_size, fp);
+    if (theirs)
+        fwrite(theirs, 1, strlength(theirs), fp);
     fprintf(fp, ">>>>>>> theirs\n");
 
     fclose(fp);
-    free(ours_data);
-    free(theirs_data);
+    if (ours)
+        strfree(ours);
+    if (theirs)
+        strfree(theirs);
     return 0;
 }
 
@@ -235,7 +382,7 @@ int merge_resolve_commit_tree(const char *hex, tree_list_t *out)
     return tree_flatten(c.tree, "", out);
 }
 
-void merge_apply_to_worktree(const merge_result_t *result)
+void merge_apply_to_worktree(merge_result_t *result)
 {
     index_t old_index = {0};
     index_read(&old_index);
@@ -248,8 +395,13 @@ void merge_apply_to_worktree(const merge_result_t *result)
     checkout_write_files(&new_index);
     index_write(&new_index);
 
-    for (int i = 0; i < result->conflict_count; i++)
+    for (int i = 0; i < result->conflict_count; i++) {
         merge_write_conflict(&result->conflicts[i]);
+        if (result->conflicts[i].merged) {
+            strfree(result->conflicts[i].merged);
+            result->conflicts[i].merged = NULL;
+        }
+    }
 }
 
 int merge_create_commit(const char *branch, const char *ours_hex,
