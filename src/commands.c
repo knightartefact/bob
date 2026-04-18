@@ -569,3 +569,47 @@ int cmd_merge(const char *branch)
     }
     return merge_create_commit(branch, ours_hex, theirs_hex);
 }
+
+int cmd_reset(void)
+{
+    char ref[256] = {0};
+    int head_type = ref_resolve_head(ref, sizeof(ref));
+    if (head_type == -1)
+        return -1;
+
+    char hex[41] = {0};
+    if (head_type == 1) {
+        strncpy(hex, ref, 40);
+    } else if (ref_read(ref, hex) == -1) {
+        fprintf(stderr, "no commits yet\n");
+        return -1;
+    }
+
+    bob_object_t *obj = object_read(hex);
+    if (obj == NULL)
+        return -1;
+    bob_commit_t commit;
+    commit_parse(obj, &commit);
+    object_free(obj);
+
+    tree_list_t tree = {0};
+    if (tree_flatten(commit.tree, "", &tree) == -1)
+        return -1;
+
+    index_t old_index = {0};
+    index_read(&old_index);
+
+    index_t new_index = {0};
+    checkout_tree_to_index(&tree, &new_index);
+    index_write(&new_index);
+
+    checkout_remove_old_files(&old_index, &new_index);
+    if (checkout_write_files(&new_index) == -1)
+        return -1;
+    index_write(&new_index);
+
+    merge_clear_head();
+
+    printf("Reset to HEAD (%.7s)\n", hex);
+    return 0;
+}

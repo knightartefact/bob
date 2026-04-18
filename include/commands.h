@@ -12,6 +12,7 @@ int cmd_branch(const char *name);
 int cmd_list_branches(void);
 int cmd_diff(const char *arg);
 int cmd_merge(const char *branch);
+int cmd_reset(void);
 
 // Plumbing commands
 int cmd_hash_object(const char *filepath);

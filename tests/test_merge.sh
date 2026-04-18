@@ -102,4 +102,51 @@ out="$("$BOB" merge feature)"
 assert_contains "$out" "Already up to date" "no-op merge"
 end_test
 
+# Helper: build a repo whose HEAD is a conflicted merge (MERGE_HEAD set,
+# f.txt contains conflict markers). Used by the resolve-and-commit tests.
+setup_conflicted_merge() {
+    new_repo "$1"
+    printf 'a\nb\nc\nd\ne\n' > f.txt
+    "$BOB" add f.txt >/dev/null
+    "$BOB" commit -m "base" >/dev/null
+    "$BOB" branch feature >/dev/null
+    "$BOB" checkout feature >/dev/null
+    printf 'a\nb\nFEAT\nd\ne\n' > f.txt
+    "$BOB" add f.txt >/dev/null
+    "$BOB" commit -m "feature" >/dev/null
+    "$BOB" checkout main >/dev/null
+    printf 'a\nb\nMAIN\nd\ne\n' > f.txt
+    "$BOB" add f.txt >/dev/null
+    "$BOB" commit -m "main" >/dev/null
+    "$BOB" merge feature 2>/dev/null
+}
+
+start_test "commit refuses to finalize merge while markers are unresolved"
+setup_conflicted_merge merge_unresolved
+# User stages the file but forgot to actually clean up the markers.
+"$BOB" add f.txt >/dev/null
+out="$("$BOB" commit -m "premature" 2>&1)"
+rc=$?
+assert_nonzero "$rc" "commit fails with unresolved conflicts"
+assert_contains "$out" "unresolved conflicts" "diagnostic message"
+assert_file_exists ".bob/MERGE_HEAD" "MERGE_HEAD still set after refusal"
+end_test
+
+start_test "resolving conflicts and committing creates a 2-parent merge commit"
+setup_conflicted_merge merge_resolve
+# Manually resolve: keep both edits as a hand-merged value.
+printf 'a\nb\nMAIN+FEAT\nd\ne\n' > f.txt
+"$BOB" add f.txt >/dev/null
+"$BOB" commit -m "merge: resolved" >/dev/null
+assert_file_absent ".bob/MERGE_HEAD" "MERGE_HEAD cleared on success"
+log_out="$("$BOB" log)"
+assert_contains "$log_out" "merge: resolved" "merge commit appears in log"
+# Verify the new commit object has two parent lines via cat-file. The
+# commit hex is the current HEAD of main.
+head_hex="$(cat .bob/refs/heads/main)"
+catfile_out="$("$BOB" cat-file "$head_hex")"
+parent_count="$(printf '%s\n' "$catfile_out" | grep -c '^Parent: ')"
+assert_eq "$parent_count" "2" "merge commit has exactly 2 parents"
+end_test
+
 summary
