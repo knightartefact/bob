@@ -15,6 +15,7 @@
 #include "checkout.h"
 #include "diff.h"
 #include "merge.h"
+#include "str/str.h"
 
 int cmd_init(void)
 {
@@ -611,5 +612,70 @@ int cmd_reset(void)
     merge_clear_head();
 
     printf("Reset to HEAD (%.7s)\n", hex);
+    return 0;
+}
+
+static str_t graph_extract_subject(const char *message)
+{
+    const char *nl = strchr(message, '\n');
+    size_t len = nl ? (size_t)(nl - message) : strlen(message);
+    return strnewlen(message, len);
+}
+
+static void graph_print_node(const char *hex, const bob_commit_t *commit)
+{
+    str_t subject = graph_extract_subject(commit->message);
+    const char *tag = (commit->parent_count >= 2) ? " (merge)" : "";
+    if (!subject) {
+        fprintf(stderr, "cmd_graph: No commit subject found\n");
+        return;
+    }
+    printf("* %.7s%s %s\n", hex, tag, subject);
+    strfree(subject);
+}
+
+static int graph_load_commit(const char *hex, bob_commit_t *out)
+{
+    bob_object_t *obj = object_read(hex);
+    if (obj == NULL) {
+        fprintf(stderr, "cmd_graph: Cannot read object\n");
+        return -1;
+    }
+    if (strcmp(obj->type, "commit") != 0) {
+        fprintf(stderr, "%s is not a commit\n", hex);
+        object_free(obj);
+        return -1;
+    }
+    commit_parse(obj, out);
+    object_free(obj);
+    return 0;
+}
+
+static void graph_advance_to_first_parent(const bob_commit_t *commit, char *hex)
+{
+    if (commit->parent_count > 0)
+        memcpy(hex, commit->parents[0], 41);
+    else
+        hex[0] = '\0';
+}
+
+int cmd_graph(void)
+{
+    char hex[41] = {0};
+    if (resolve_head_hex(hex) == -1)
+        return -1;
+
+    int first = 1;
+    while (hex[0] != '\0') {
+        bob_commit_t commit;
+        if (graph_load_commit(hex, &commit) == -1)
+            return 84;
+
+        if (!first)
+            printf("|\n");
+        first = 0;
+        graph_print_node(hex, &commit);
+        graph_advance_to_first_parent(&commit, hex);
+    }
     return 0;
 }

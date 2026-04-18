@@ -78,6 +78,7 @@ Porcelain (everyday use):
 | `bob add <files...>` | stage files |
 | `bob commit -m <msg>` | record a commit (reads stdin if `-m` is omitted) |
 | `bob log` | show commit history from HEAD |
+| `bob graph` | show a simple ASCII graph of the current branch (latest commit on top) |
 | `bob branch` | list branches (`*` marks the current one) |
 | `bob branch <name>` | create a branch at HEAD |
 | `bob checkout <branch-or-hex>` | switch branches or restore a commit |
