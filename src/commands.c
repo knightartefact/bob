@@ -395,3 +395,25 @@ int cmd_checkout(const char *arg)
     }
     return 0;
 }
+
+int cmd_branch(const char *name)
+{
+    char ref[256] = {0};
+    int head_type = ref_resolve_head(ref, sizeof(ref));
+    if (head_type == -1)
+        return -1;
+    char hex[41] = {0};
+    if (head_type == 1) {
+        strncpy(hex, ref, 40);
+    } else if (ref_read(ref, hex) == -1) {
+        fprintf(stderr, "no commits yet\n");
+        return -1;
+    }
+    char branch_ref[256] = {0};
+    snprintf(branch_ref, sizeof(branch_ref), "refs/heads/%s", name);
+    if (ref_is_branch(name)) {
+        fprintf(stderr, "branch '%s' already exists\n", name);
+        return -1;
+    }
+    return ref_update(branch_ref, hex);
+}
