@@ -206,6 +206,37 @@ int cmd_add(int count, const char **files)
     return 0;
 }
 
+int cmd_log(void)
+{
+    char ref[256] = {0};
+    if (ref_resolve_head(ref, sizeof(ref)) == -1)
+        return -1;
+    char hex[41] = {0};
+    if (ref_read(ref, hex) == -1) {
+        fprintf(stderr, "no commits yet\n");
+        return -1;
+    }
+
+    while (hex[0] != '\0') {
+        bob_object_t *obj = object_read(hex);
+        if (obj == NULL)
+            return -1;
+        if (strcmp(obj->type, "commit") != 0) {
+            fprintf(stderr, "%s is not a commit\n", hex);
+            object_free(obj);
+            return -1;
+        }
+
+        bob_commit_t commit;
+        commit_parse(obj, &commit);
+        commit_print(hex, &commit);
+
+        object_free(obj);
+        memcpy(hex, commit.parent, 41);
+    }
+    return 0;
+}
+
 int cmd_commit(const char *message)
 {
     index_t index = {0};
