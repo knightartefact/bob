@@ -1,5 +1,6 @@
 #include "tree.h"
 #include "object.h"
+#include "utils.h"
 #include "str/str.h"
 
 #include <stdlib.h>
@@ -68,4 +69,79 @@ char *tree_write(const index_t *idx)
         return digest;
     }
     return write_tree_recursive(idx, 0, idx->count, 0);
+}
+
+static size_t parse_raw_entry(const char *data, size_t size, size_t i, raw_tree_entry_t *raw)
+{
+    raw->mode_str = data + i;
+    const char *space = memchr(raw->mode_str, ' ', size - i);
+    if (space == NULL)
+        return 0;
+    raw->mode_len = space - raw->mode_str;
+
+    raw->name = space + 1;
+    const char *nul = memchr(raw->name, '\0', size - (raw->name - data));
+    if (nul == NULL)
+        return 0;
+
+    raw->sha = (const unsigned char *)(nul + 1);
+    if ((raw->sha + 20) - (const unsigned char *)data > (long)size)
+        return 0;
+    return (raw->sha + 20) - (const unsigned char *)data;
+}
+
+static str_t join_path(const char *prefix, const char *name)
+{
+    if (prefix[0] != '\0')
+        return strformat("%s/%s", prefix, name);
+    return strnew(name);
+}
+
+static int is_tree_mode(const raw_tree_entry_t *raw)
+{
+    return raw->mode_len == 5 && memcmp(raw->mode_str, "40000", 5) == 0;
+}
+
+static void flatten_blob_entry(const raw_tree_entry_t *raw, const char *prefix, tree_list_t *out)
+{
+    if (out->count >= INDEX_MAX_ENTRIES)
+        return;
+    tree_entry_t *entry = &out->entries[out->count];
+    str_t path = join_path(prefix, raw->name);
+    strncpy(entry->path, path, sizeof(entry->path) - 1);
+    strfree(path);
+    memcpy(entry->sha1, raw->sha, 20);
+    entry->mode = strtoul(raw->mode_str, NULL, 8);
+    out->count++;
+}
+
+static void flatten_tree_entry(const raw_tree_entry_t *raw, const char *prefix, tree_list_t *out)
+{
+    str_t subprefix = join_path(prefix, raw->name);
+    char hex[41] = {0};
+    sha2hex(raw->sha, hex);
+    tree_flatten(hex, subprefix, out);
+    strfree(subprefix);
+}
+
+int tree_flatten(const char *tree_hex, const char *prefix, tree_list_t *out)
+{
+    bob_object_t *obj = object_read(tree_hex);
+    if (obj == NULL)
+        return -1;
+
+    size_t i = 0;
+    while (i < obj->size) {
+        raw_tree_entry_t raw;
+        size_t next = parse_raw_entry(obj->data, obj->size, i, &raw);
+        if (next == 0)
+            break;
+        if (is_tree_mode(&raw))
+            flatten_tree_entry(&raw, prefix, out);
+        else
+            flatten_blob_entry(&raw, prefix, out);
+        i = next;
+    }
+    object_free(obj);
+    return 0;
 }
