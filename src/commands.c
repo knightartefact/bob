@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -9,6 +10,7 @@
 #include "tree.h"
 #include "commit.h"
 #include "utils.h"
+#include "status.h"
 
 int cmd_init(void)
 {
@@ -278,5 +280,40 @@ int cmd_commit(const char *message)
     const char *branch = strrchr(ref, '/');
     branch = branch ? branch + 1 : ref;
     printf("[%s %.7s] %s\n", branch, commit_hex, message);
+    return 0;
+}
+
+int cmd_status(void)
+{
+    char ref[256] = {0};
+    if (ref_resolve_head(ref, sizeof(ref)) == -1)
+        return -1;
+    const char *branch = strrchr(ref, '/');
+    branch = branch ? branch + 1 : ref;
+    printf("On branch %s\n", branch);
+
+    index_t index = {0};
+    index_read(&index);
+
+    tree_list_t head_tree = {0};
+    char head_hex[41] = {0};
+    if (ref_read(ref, head_hex) == 0) {
+        bob_object_t *obj = object_read(head_hex);
+        if (obj == NULL) {
+            return -1;
+        }
+        bob_commit_t commit;
+        commit_parse(obj, &commit);
+        object_free(obj);
+        if (commit.tree[0] != '\0')
+            tree_flatten(commit.tree, "", &head_tree);
+    }
+
+    status_staged(&index, &head_tree);
+    status_unstaged(&index);
+
+    filelist_t files = {0};
+    worktree_list(".", "", &files);
+    status_untracked(&files, &index);
     return 0;
 }

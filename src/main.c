@@ -35,6 +35,9 @@ int main(int ac, char **av)
     if (strcmp(av[1], "log") == 0) {
         return cmd_log();
     }
+    if (strcmp(av[1], "status") == 0) {
+        return cmd_status();
+    }
     if (strcmp(av[1], "commit") == 0) {
         const char *message = NULL;
         for (int i = 2; i < ac - 1; i++) {
