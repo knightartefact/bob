@@ -165,3 +165,12 @@ void index_sort(index_t *index)
 {
     qsort(index->entries, index->count, sizeof(index_entry_t), index_entry_cmp);
 }
+
+const index_entry_t *index_find(const index_t *idx, const char *path)
+{
+    for (int i = 0; i < idx->count; i++) {
+        if (strcmp(idx->entries[i].path, path) == 0)
+            return &idx->entries[i];
+    }
+    return NULL;
+}

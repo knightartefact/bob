@@ -15,6 +15,7 @@ set(SRC_FILES
     src/config.c
     src/commit.c
     src/worktree.c
+    src/status.c
 )
 
 add_executable(${EXEC_NAME} ${SRC_FILES})
