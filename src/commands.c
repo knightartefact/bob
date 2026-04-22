@@ -11,6 +11,7 @@
 #include "commit.h"
 #include "utils.h"
 #include "status.h"
+#include "checkout.h"
 
 int cmd_init(void)
 {
@@ -325,5 +326,44 @@ int cmd_status(void)
     filelist_t files = {0};
     worktree_list(".", "", &files);
     status_untracked(&files, &index);
+    return 0;
+}
+
+int cmd_checkout(const char *commit_hex)
+{
+    bob_object_t *obj = object_read(commit_hex);
+    if (obj == NULL) {
+        fprintf(stderr, "checkout: could not read commit %s\n", commit_hex);
+        return -1;
+    }
+    if (strcmp(obj->type, "commit") != 0) {
+        fprintf(stderr, "checkout: %s is not a commit\n", commit_hex);
+        object_free(obj);
+        return -1;
+    }
+    bob_commit_t commit;
+    commit_parse(obj, &commit);
+    object_free(obj);
+
+    tree_list_t tree_list = {0};
+    if (tree_flatten(commit.tree, "", &tree_list) == -1)
+        return -1;
+
+    index_t old_index = {0};
+    index_read(&old_index);
+
+    index_t new_index = {0};
+    checkout_tree_to_index(&tree_list, &new_index);
+    index_write(&new_index);
+
+    checkout_remove_old_files(&old_index, &new_index);
+    if (checkout_write_files(&new_index) == -1)
+        return -1;
+    index_write(&new_index);
+
+    char ref[256] = {0};
+    if (ref_resolve_head(ref, sizeof(ref)) == -1)
+        return -1;
+    ref_update(ref, commit_hex);
     return 0;
 }
