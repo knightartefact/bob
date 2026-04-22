@@ -24,6 +24,7 @@ typedef struct index_s {
 int index_read(index_t *idx);
 int index_write(const index_t *idx);
 void index_add(index_t *idx, const index_entry_t *entry);
+int index_remove(index_t *idx, const char *path);
 void index_sort(index_t *index);
 
 const index_entry_t *index_find(const index_t *idx, const char *path);

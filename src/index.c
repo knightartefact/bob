@@ -154,6 +154,19 @@ void index_add(index_t *index, const index_entry_t *entry)
         index_sort(index);
 }
 
+int index_remove(index_t *index, const char *path)
+{
+    for (int i = 0; i < index->count; i++) {
+        if (strcmp(index->entries[i].path, path) == 0) {
+            memmove(&index->entries[i], &index->entries[i + 1],
+                (index->count - i - 1) * sizeof(index_entry_t));
+            index->count--;
+            return 0;
+        }
+    }
+    return -1;
+}
+
 static int index_entry_cmp(const void *lhs, const void *rhs)
 {
     const index_entry_t *left_entry = lhs;
