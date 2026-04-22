@@ -102,11 +102,17 @@ int cmd_cat_file(const char *hex)
     if (obj == NULL) {
         return -1;
     }
-    printf("type: %s\n", obj->type);
-    if (strcmp(obj->type, "tree") == 0)
-        cat_tree(obj);
-    else
-        cat_blob(obj);
+    if (strcmp(obj->type, "commit") == 0) {
+        bob_commit_t commit;
+        commit_parse(obj, &commit);
+        commit_print(hex, &commit);
+    } else {
+        printf("type: %s\n", obj->type);
+        if (strcmp(obj->type, "tree") == 0)
+            cat_tree(obj);
+        else
+            cat_blob(obj);
+    }
 
     object_free(obj);
     return 0;
