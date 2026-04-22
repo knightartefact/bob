@@ -222,10 +222,13 @@ int cmd_add(int count, const char **files)
 int cmd_log(void)
 {
     char ref[256] = {0};
-    if (ref_resolve_head(ref, sizeof(ref)) == -1)
+    int head_type = ref_resolve_head(ref, sizeof(ref));
+    if (head_type == -1)
         return -1;
     char hex[41] = {0};
-    if (ref_read(ref, hex) == -1) {
+    if (head_type == 1) {
+        strncpy(hex, ref, 40);
+    } else if (ref_read(ref, hex) == -1) {
         fprintf(stderr, "no commits yet\n");
         return -1;
     }
@@ -267,12 +270,16 @@ int cmd_commit(const char *message)
     free(tree_digest);
 
     char ref[256] = {0};
-    if (ref_resolve_head(ref, sizeof(ref)) == -1) {
+    int head_type = ref_resolve_head(ref, sizeof(ref));
+    if (head_type == -1) {
         return -1;
     }
     char parent_hex[41] = {0};
     const char *parent = NULL;
-    if (ref_read(ref, parent_hex) == 0) {
+    if (head_type == 1) {
+        strncpy(parent_hex, ref, 40);
+        parent = parent_hex;
+    } else if (ref_read(ref, parent_hex) == 0) {
         parent = parent_hex;
     }
 
@@ -284,31 +291,47 @@ int cmd_commit(const char *message)
     sha2hex((unsigned char *)commit_digest, commit_hex);
     free(commit_digest);
 
-    if (ref_update(ref, commit_hex) == -1) {
+    if (head_type == 1) {
+        ref_write_head(commit_hex);
+    } else if (ref_update(ref, commit_hex) == -1) {
         return -1;
     }
 
-    const char *branch = strrchr(ref, '/');
-    branch = branch ? branch + 1 : ref;
-    printf("[%s %.7s] %s\n", branch, commit_hex, message);
+    if (head_type == 1) {
+        printf("[detached %.7s] %s\n", commit_hex, message);
+    } else {
+        const char *branch = strrchr(ref, '/');
+        branch = branch ? branch + 1 : ref;
+        printf("[%s %.7s] %s\n", branch, commit_hex, message);
+    }
     return 0;
 }
 
 int cmd_status(void)
 {
     char ref[256] = {0};
-    if (ref_resolve_head(ref, sizeof(ref)) == -1)
+    int head_type = ref_resolve_head(ref, sizeof(ref));
+    if (head_type == -1)
         return -1;
-    const char *branch = strrchr(ref, '/');
-    branch = branch ? branch + 1 : ref;
-    printf("On branch %s\n", branch);
+    if (head_type == 1) {
+        printf("HEAD detached at %.7s\n", ref);
+    } else {
+        const char *branch = strrchr(ref, '/');
+        branch = branch ? branch + 1 : ref;
+        printf("On branch %s\n", branch);
+    }
 
     index_t index = {0};
     index_read(&index);
 
     tree_list_t head_tree = {0};
     char head_hex[41] = {0};
-    if (ref_read(ref, head_hex) == 0) {
+    if (head_type == 1) {
+        strncpy(head_hex, ref, 40);
+    } else if (ref_read(ref, head_hex) != 0) {
+        head_hex[0] = '\0';
+    }
+    if (head_hex[0] != '\0') {
         bob_object_t *obj = object_read(head_hex);
         if (obj == NULL) {
             return -1;
@@ -329,15 +352,17 @@ int cmd_status(void)
     return 0;
 }
 
-int cmd_checkout(const char *commit_hex)
+int cmd_checkout(const char *arg)
 {
-    bob_object_t *obj = object_read(commit_hex);
+    char hex[41] = {0};
+    ref_resolve_commit(arg, hex);
+    bob_object_t *obj = object_read(hex);
     if (obj == NULL) {
-        fprintf(stderr, "checkout: could not read commit %s\n", commit_hex);
+        fprintf(stderr, "checkout: could not read commit %s\n", arg);
         return -1;
     }
     if (strcmp(obj->type, "commit") != 0) {
-        fprintf(stderr, "checkout: %s is not a commit\n", commit_hex);
+        fprintf(stderr, "checkout: %s is not a commit\n", hex);
         object_free(obj);
         return -1;
     }
@@ -361,9 +386,12 @@ int cmd_checkout(const char *commit_hex)
         return -1;
     index_write(&new_index);
 
-    char ref[256] = {0};
-    if (ref_resolve_head(ref, sizeof(ref)) == -1)
-        return -1;
-    ref_update(ref, commit_hex);
+    if (ref_is_branch(arg)) {
+        char head_val[512] = {0};
+        snprintf(head_val, sizeof(head_val), "ref: refs/heads/%s", arg);
+        ref_write_head(head_val);
+    } else {
+        ref_write_head(hex);
+    }
     return 0;
 }
