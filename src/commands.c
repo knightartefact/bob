@@ -201,7 +201,9 @@ int cmd_write_tree(void)
 
 int cmd_commit_tree(const char *tree_hex, const char *message, const char *parent_hex)
 {
-    char *digest = commit_create(tree_hex, parent_hex, message);
+    const char *parents[] = { parent_hex };
+    int parent_count = parent_hex ? 1 : 0;
+    char *digest = commit_create(tree_hex, parents, parent_count, message);
     if (digest == NULL) {
         return -1;
     }
@@ -250,7 +252,10 @@ int cmd_log(void)
         commit_print(hex, &commit);
 
         object_free(obj);
-        memcpy(hex, commit.parent, 41);
+        if (commit.parent_count > 0)
+            memcpy(hex, commit.parents[0], 41);
+        else
+            hex[0] = '\0';
     }
     return 0;
 }
@@ -277,15 +282,16 @@ int cmd_commit(const char *message)
         return -1;
     }
     char parent_hex[41] = {0};
-    const char *parent = NULL;
+    const char *parents[] = { parent_hex };
+    int parent_count = 0;
     if (head_type == 1) {
         strncpy(parent_hex, ref, 40);
-        parent = parent_hex;
+        parent_count = 1;
     } else if (ref_read(ref, parent_hex) == 0) {
-        parent = parent_hex;
+        parent_count = 1;
     }
 
-    char *commit_digest = commit_create(tree_hex, parent, message);
+    char *commit_digest = commit_create(tree_hex, parents, parent_count, message);
     if (commit_digest == NULL) {
         return -1;
     }

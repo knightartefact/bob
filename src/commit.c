@@ -39,10 +39,20 @@ static void parse_message(const char *start, const char *end, char *out,
     memcpy(out, start, msg_len);
 }
 
+static void parse_parent_line(const char *line, int len, bob_commit_t *commit)
+{
+    if (strncmp(line, "parent ", 7) != 0 || len < 47)
+        return;
+    if (commit->parent_count >= COMMIT_MAX_PARENTS)
+        return;
+    memcpy(commit->parents[commit->parent_count], line + 7, 40);
+    commit->parent_count++;
+}
+
 static void parse_header_line(const char *line, int len, bob_commit_t *commit)
 {
     parse_hex_field(line, len, "tree ", 5, 45, commit->tree);
-    parse_hex_field(line, len, "parent ", 7, 47, commit->parent);
+    parse_parent_line(line, len, commit);
     parse_str_field(line, len, "author ", 7, commit->author, sizeof(commit->author));
     parse_str_field(line, len, "committer ", 10, commit->committer, sizeof(commit->committer));
 }
@@ -100,8 +110,8 @@ static void print_date(const char *field)
 void commit_print(const char *hex, const bob_commit_t *commit)
 {
     printf("commit %s\n", hex);
-    if (commit->parent[0] != '\0')
-        printf("Parent: %s\n", commit->parent);
+    for (int i = 0; i < commit->parent_count; i++)
+        printf("Parent: %s\n", commit->parents[i]);
     print_identity("Author", commit->author);
     print_date(commit->author);
     print_identity("Commit", commit->committer);
@@ -112,7 +122,7 @@ void commit_print(const char *hex, const bob_commit_t *commit)
     printf("\n");
 }
 
-char *commit_create(const char *tree_hex, const char *parent_hex, const char *message)
+char *commit_create(const char *tree_hex, const char **parents, int parent_count, const char *message)
 {
     bob_config_t cfg = {0};
     if (config_read(&cfg) == -1)
@@ -124,8 +134,8 @@ char *commit_create(const char *tree_hex, const char *parent_hex, const char *me
 
     time_t now = time(NULL);
     str_t body = strformat("tree %s\n", tree_hex);
-    if (parent_hex != NULL) {
-        str_t parent_line = strformat("parent %s\n", parent_hex);
+    for (int i = 0; i < parent_count; i++) {
+        str_t parent_line = strformat("parent %s\n", parents[i]);
         strconcatstr(&body, parent_line);
         strfree(parent_line);
     }
