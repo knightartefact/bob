@@ -18,6 +18,7 @@ set(SRC_FILES
     src/status.c
     src/checkout.c
     src/diff.c
+    src/merge.c
 )
 
 add_executable(${EXEC_NAME} ${SRC_FILES})

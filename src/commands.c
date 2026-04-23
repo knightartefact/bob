@@ -14,6 +14,7 @@
 #include "status.h"
 #include "checkout.h"
 #include "diff.h"
+#include "merge.h"
 
 int cmd_init(void)
 {
@@ -497,4 +498,61 @@ int cmd_diff(const char *arg)
     for (int i = 0; i < diff.count; i++)
         diff_print_entry(&diff.entries[i]);
     return 0;
+}
+
+static int resolve_head_hex(char *out_hex)
+{
+    char ref[256] = {0};
+    int head_type = ref_resolve_head(ref, sizeof(ref));
+    if (head_type == -1)
+        return -1;
+    if (head_type == 1) {
+        strncpy(out_hex, ref, 40);
+    } else if (ref_read(ref, out_hex) == -1) {
+        fprintf(stderr, "no commits yet\n");
+        return -1;
+    }
+    return 0;
+}
+
+int cmd_merge(const char *branch)
+{
+    char ours_hex[41] = {0};
+    if (resolve_head_hex(ours_hex) == -1)
+        return -1;
+    char theirs_hex[41] = {0};
+    ref_resolve_commit(branch, theirs_hex);
+
+    if (strcmp(ours_hex, theirs_hex) == 0) {
+        printf("Already up to date.\n");
+        return 0;
+    }
+
+    char base_hex[41] = {0};
+    if (merge_find_base(ours_hex, theirs_hex, base_hex) == -1) {
+        fprintf(stderr, "merge: no common ancestor\n");
+        return -1;
+    }
+    if (strcmp(base_hex, ours_hex) == 0) {
+        printf("Fast-forward\n");
+        return cmd_checkout(branch);
+    }
+
+    tree_list_t base_tree = {0}, ours_tree = {0}, theirs_tree = {0};
+    merge_resolve_commit_tree(base_hex, &base_tree);
+    resolve_head_tree(&ours_tree);
+    resolve_arg_tree(branch, &theirs_tree);
+
+    merge_result_t result = {0};
+    merge_trees(&base_tree, &ours_tree, &theirs_tree, &result);
+    merge_apply_to_worktree(&result);
+
+    if (result.conflict_count > 0) {
+        printf("CONFLICT in %d file(s):\n", result.conflict_count);
+        for (int i = 0; i < result.conflict_count; i++)
+            printf("\t%s\n", result.conflicts[i].path);
+        printf("Automatic merge failed; fix conflicts and then commit.\n");
+        return 1;
+    }
+    return merge_create_commit(branch, ours_hex, theirs_hex);
 }
